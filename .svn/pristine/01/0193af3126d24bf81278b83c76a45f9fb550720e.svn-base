@@ -1,0 +1,91 @@
+package view;
+
+import static model.PropertyChangeEnabledRaceControls.PROPERTY_TIME;
+import static model.PropertyChangeEnabledRaceControls.PROPERTY_HEADER;
+import static model.PropertyChangeEnabledRaceControls.PROPERTY_DONE_LOADING;
+
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
+import javax.swing.JSlider;
+import javax.swing.event.ChangeEvent;
+import javax.swing.event.ChangeListener;
+import model.RaceInfo;
+
+/**
+ * A slider that manipulates timestamp of race.
+ * 
+ * @author Nathan Stickler
+ * @version 11/22/19
+ */
+public class Slider extends JSlider implements PropertyChangeListener, ChangeListener {
+
+    /**
+     * 
+     */
+    private static final long serialVersionUID = -6583981095886857346L;
+
+    /** The number of milliseconds in a second. */
+    private static final int MILLS_PER_SEC = 1000;
+    
+    /** The number of seconds in a minute. */
+    private static final int SEC_PER_MIN = 60;
+    
+    /** Minor tick of the slider. */
+    private static final int MINOR_TICK = 10;
+    
+    /** The race model that controls the race. */
+    private final SliderCallback mySliderCallback;
+    
+    /**
+     * Constructs a slider.
+     * 
+     * @param theCallBack the callback
+     */
+    public Slider(final SliderCallback theCallBack) {
+        super();
+        mySliderCallback = theCallBack;
+        setValue(0);
+        setEnabled(false);
+        addChangeListener(this);
+        
+    }
+    @Override
+    public void propertyChange(final PropertyChangeEvent theEvent) {
+        if (PROPERTY_TIME.equals(theEvent.getPropertyName())) {
+            final int time = (Integer) theEvent.getNewValue();
+            setValue(time / MILLS_PER_SEC);
+        } else if (PROPERTY_HEADER.equals(theEvent.getPropertyName())) {
+            final int maxValue = ((RaceInfo) theEvent.getNewValue()).getTotalRaceTime();
+            setMinorTickSpacing(MINOR_TICK);
+            setMajorTickSpacing(SEC_PER_MIN);
+            setPaintTicks(true);
+            setMaximum(maxValue / MILLS_PER_SEC);
+        } else if (PROPERTY_DONE_LOADING.equals(theEvent.getPropertyName())) {
+            setEnabled(true);
+        }
+    }
+    
+    @Override
+    public void stateChanged(final ChangeEvent theEvent) {
+        final JSlider slider = (JSlider) theEvent.getSource();
+        if (slider.getValueIsAdjusting()) {
+            mySliderCallback.onValueChanged(slider.getValue() * MILLS_PER_SEC);
+        }
+    }
+    
+    /**
+     * An interface for slider actions performed.
+     * 
+     * @author Nathan Stickler
+     * @version 11/23/19
+     */
+    public interface SliderCallback {
+        
+        /**
+         * Call for actions of buttons being pressed.
+         * @param theSliderValue the value of the slider
+         */
+        void onValueChanged(int theSliderValue);       
+    }
+
+}

@@ -1,0 +1,74 @@
+package controller;
+
+import java.io.File;
+import java.io.IOException;
+import model.PropertyChangeEnabledRaceControls;
+
+
+/**
+ * My Controller class used to mediate buttons that interact with the data.
+ * 
+ * @author Nathan Stickler
+ * @version 11/23/19
+ */
+public class MainController {
+
+    
+    /** A reference to the backing Race Model. */
+    private final PropertyChangeEnabledRaceControls myModel;
+    
+    /**
+     * Constructs a controller.
+     * @param theRace the race model
+     */
+    public MainController(final PropertyChangeEnabledRaceControls theRace) {
+        myModel = theRace;
+    }
+    
+    /**
+     * Controls the file being loaded.
+     * @param theFile the file loading
+     * @throws IOException if the file is invalid
+     */
+    public void onFileSelected(final File theFile)  throws IOException {
+        myModel.loadRace(theFile);
+        
+    }
+
+    /**
+     * Reset the race to 0 on click.
+     */
+    public void onRestartClicked() {
+        myModel.moveTo(0);
+    }
+
+    /**
+     * Start the race on click.
+     */
+    public void onPlayToggleClicked() {
+        myModel.togglePlay();
+    }
+
+    /**
+     * Toggles speed between x1 and x4 on click. 
+     */
+    public void onSpeedToggleClicked() {
+        myModel.toggleSpeed();
+    }
+
+     /**
+      * Toggles one race instance or repeat on click. 
+      */
+    public void onLoopToggleClicked() {
+        myModel.toggleLoopRace();
+        
+    }
+    
+    /**
+     * Changes the state of the slider. 
+     * @param theValue 
+     */
+    public void onSliderStateChanged(final int theValue) {
+        myModel.moveTo(theValue);
+    }
+}

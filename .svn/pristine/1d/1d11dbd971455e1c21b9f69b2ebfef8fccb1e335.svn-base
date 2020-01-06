@@ -1,0 +1,382 @@
+
+package model;
+
+import java.awt.event.ActionEvent;
+import java.beans.PropertyChangeListener;
+import java.beans.PropertyChangeSupport;
+import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Queue;
+import java.util.Scanner;
+import java.util.concurrent.ExecutionException;
+import javax.swing.SwingWorker;
+import javax.swing.Timer;
+
+/**
+ * Race day model.
+ * 
+ * @author Nathan Stickler
+ * @version 11/8/19
+ */
+public class RaceModel implements PropertyChangeEnabledRaceControls {
+
+    /** Separator to split race messages. */
+    private static final String DELIMITER = ":";
+    
+    /** Amount of milliseconds between each call to the timer. */
+    private static final int TIMER_FREQUENCY = 31;
+    
+    /** The. */
+    private final PropertyChangeSupport myPcs;
+
+    /** List of messages organized by timestamp. */
+    private final Map<Integer, List<Message>> myMsgs;
+    
+    /** Current time of the race. */
+    private int myTime;
+    
+    /** Contains information from header. */
+    private RaceInfo myRaceInfo;
+    
+    /** Lists if racer ID should be disabled or not. */
+    private final Map<Integer, Boolean> myTogglePart;
+    
+    /** List of header patterns to adhere to. */
+    private final List<String> myHeaderList;
+    
+    /** The timer to control how often to advance the Time object. */ 
+    private final Timer mySwingTimer;
+    
+    /** The time multiplier. */
+    private int myMultiplier;
+    
+    /**
+     * Constructor for the RaceModel.
+     */
+    public RaceModel() {
+        super();
+        myPcs = new PropertyChangeSupport(this);
+        mySwingTimer = new Timer(TIMER_FREQUENCY, this::handleTimer);
+        myHeaderList = new ArrayList<>();
+        myMsgs = new HashMap<>();
+        myTogglePart = new HashMap<>();
+        myTime = 0;
+        myMultiplier = 1;
+        addRegex();
+    }
+
+    /**
+     * Create a list of patterns to follow for header.
+     */
+    private void addRegex() {
+        myHeaderList.add("#RACE:(.+)");
+        myHeaderList.add("#TRACK:(.+)");
+        myHeaderList.add("#WIDTH:(\\d+)");
+        myHeaderList.add("#HEIGHT:(\\d+)");
+        myHeaderList.add("#DISTANCE:(\\d+)");
+        myHeaderList.add("#TIME:(\\d+)");
+        myHeaderList.add("#PARTICIPANTS:(\\d+)");
+    }
+    
+    @Override
+    public void advance() {
+        advance(1);
+    }
+
+    @Override
+    public void advance(final int theMillisecond) {
+        final int oldTime = myTime;
+        final int newTime =  myTime + theMillisecond;
+        if (newTime > myRaceInfo.getTotalRaceTime()) {
+            myTime = myRaceInfo.getTotalRaceTime();
+            myPcs.firePropertyChange(PROPERTY_REPEAT, false, true);
+            if (myTime == myRaceInfo.getTotalRaceTime()) {
+                myPcs.firePropertyChange(PROPERTY_RACE_FINISHED, false, true);
+            }
+        } else {
+            myTime = newTime;
+        }
+        myPcs.firePropertyChange(PROPERTY_TIME, oldTime, myTime);
+    }
+
+    @Override
+    public void moveTo(final int theMillisecond) {
+        myTime = theMillisecond;
+    }
+
+    @Override
+    public void toggleParticipant(final int theParticipantID, final boolean theToggle) {
+        if (myTogglePart.containsKey(theParticipantID)) {
+            myTogglePart.put(theParticipantID, theToggle);
+        }
+    }
+
+    @Override
+    public void loadRace(final File theRaceFile) throws IOException {
+
+        final FileLoader fileLoader = new FileLoader(theRaceFile);
+        fileLoader.execute();
+    }
+    
+    /**
+     * Starts the race.
+     */
+    public void startRace() {
+        mySwingTimer.start();    
+    }
+
+    /**
+     * Event handler for the timer. 
+     * @param theEvent the fired event
+     */
+    private void handleTimer(final ActionEvent theEvent) { //NOPMD
+        advance(TIMER_FREQUENCY * myMultiplier);
+    }
+    
+    /**
+     * Method for changing speed.
+     */
+    public void toggleSpeed() {
+        final int oldValue = myMultiplier;
+        if (myMultiplier == 1) {
+            myMultiplier = 4;
+        } else {
+            myMultiplier = 1;
+        }
+        myPcs.firePropertyChange(PROPERTY_MULTIPLIER, oldValue, myMultiplier);
+    }
+    
+    public void loopRace() {
+        
+    }
+    
+    /**
+     * Loads the race information.
+     * 
+     * @param theHeader input of header messages
+     * @throws IOException if race file format is invalid
+     * @return the Race info
+     */
+    private RaceInfo parseHeader(final Scanner theHeader) throws IOException {
+        String oldLine = "";
+        String newLine = "";
+        int numOfRacers = 0;
+
+        if (theHeader.hasNextLine()) {
+            newLine = theHeader.nextLine();
+        }
+        final Queue<String> header = new LinkedList<>();
+        for (final String regex : myHeaderList) {
+            lineValidation(theHeader.hasNextLine(), newLine, regex);
+            header.add(newLine.split(DELIMITER)[1]);
+            oldLine = newLine;
+            newLine = theHeader.nextLine();
+        }
+        numOfRacers = Integer.parseInt(oldLine.replaceAll("\\D+", ""));
+
+        final List<Racer> racers = new ArrayList<>();
+        for (int i = 0; i < numOfRacers; i++) {
+            lineValidation(theHeader.hasNextLine(), newLine, "#(\\d+):(.+):(-*)(\\d*)(.\\d?)");
+            final String[] racerInfo = newLine.split(DELIMITER);
+            final int racerID = Integer.parseInt(racerInfo[0].substring(1));
+            racers.add(new Racer(racerID, racerInfo[1],
+                                           Double.parseDouble(racerInfo[2])));
+            myTogglePart.put(racerID, true);
+            if (i < numOfRacers - 1) {
+                newLine = theHeader.nextLine();
+            }
+        }
+
+        myRaceInfo = new RaceInfo(header.poll(), header.poll(),
+                                  Integer.parseInt(header.poll()),
+                                  Integer.parseInt(header.poll()),
+                                  Integer.parseInt(header.poll()),
+                                  Integer.parseInt(header.poll()),
+                                  Integer.parseInt(header.poll()), racers);
+        
+        return myRaceInfo;
+    }
+    
+    /**
+     * Helper method that finds the validity of a certain part of the file.
+     * 
+     * @param theNext if there is a next element
+     * @param theLine the line to be checked
+     * @param theRegex validation pattern
+     * @throws IOException if the line format is invalid
+     */
+    private void lineValidation(final boolean theNext, final String theLine,
+                                final String theRegex)
+                    throws IOException {
+        if (!theNext || !theLine.matches(theRegex)) {
+            throw new IOException();
+        }
+    }
+
+    /**
+     * Helper method that only compares if string has valid pattern.
+     * 
+     * @param theLine the line to be checked
+     * @param theRegex validation pattern
+     * @throws IOException if the line format is invalid
+     */
+    private void lineValidation(final String theLine, final String theRegex)
+                    throws IOException {
+        lineValidation(true, theLine, theRegex);
+    }
+
+    /**
+     * Helper method for parsing telemetry message.
+     * @param theLine the line being read
+     * @return message returns the message
+     */
+    private Message parseTelemetry(final String theLine) {
+        final String[] parts = theLine.split(DELIMITER);
+        final int timeStamp = Integer.parseInt(parts[1]);
+        final int racerID = Integer.parseInt(parts[2]);
+        final double distance = Double.parseDouble(parts[3]);
+        final int lap = Integer.parseInt(parts[4]);
+        final TelemetryMessage message = new TelemetryMessage(timeStamp, racerID,
+                                                              distance, lap);
+        return message;
+    }
+
+    /**
+     * Helper method for parsing leader board message.
+     * @param theLine the line being read
+     * @return message returns the message
+     */
+    private Message parseLeaderBoard(final String theLine) {
+        final String[] parts = theLine.split(DELIMITER);
+        final int timeStamp = Integer.parseInt(parts[1]);
+        final int[] racerIDs = new int[parts.length - 2];
+        int racerIDIndex = 0;
+        for (int i = 2; i < parts.length; i++) {
+            racerIDs[racerIDIndex++] = Integer.parseInt(parts[i]);
+        }
+        final LeaderboardMessage message = new LeaderboardMessage(timeStamp, racerIDs);
+        return message;
+    }
+
+    /**
+     * Helper method for parsing finish line crossing message.
+     * @param theLine the line being read
+     * @return message returns the message
+     */
+    private Message parseLineCrossing(final String theLine) {
+        final String[] parts = theLine.split(DELIMITER);
+        final int timeStamp = Integer.parseInt(parts[1]);
+        final int racerID = Integer.parseInt(parts[2]);
+        final int lap = Integer.parseInt(parts[3]);
+        final boolean isFinish = Boolean.parseBoolean(parts[4]);
+        final LineCrossingMessage message = new LineCrossingMessage(timeStamp, racerID,
+                                                                    lap, isFinish);
+        return message;
+    }
+    
+    /**
+     * Helper method to get message list at the timeStamp.
+     * @param theTimeStamp the timeStamp
+     * @return the list at the timeStamp
+     */
+    private List<Message> getMessageListAt(final int theTimeStamp) {
+        if (myMsgs.get(theTimeStamp) != null) {
+            return myMsgs.get(theTimeStamp);
+        } else {
+            return new ArrayList<>();
+        }
+    }
+
+    @Override
+    public void addPropertyChangeListener(final PropertyChangeListener theListener) {
+        myPcs.addPropertyChangeListener(theListener);
+    }
+
+    @Override
+    public void addPropertyChangeListener(final String thePropertyName,
+                                          final PropertyChangeListener theListener) {
+        myPcs.addPropertyChangeListener(thePropertyName, theListener);
+    }
+
+    @Override
+    public void removePropertyChangeListener(final PropertyChangeListener theListener) {
+        myPcs.removePropertyChangeListener(theListener);
+    }
+
+    @Override
+    public void removePropertyChangeListener(final String thePropertyName,
+                                             final PropertyChangeListener theListener) {
+        myPcs.removePropertyChangeListener(thePropertyName, theListener);
+    }
+    /**
+     * A worker thread to load the files.
+     * 
+     * @author Charles Bryan
+     * @version Autumn 2019
+     */
+    private class FileLoader extends SwingWorker<RaceInfo, Void> {
+
+        /** An instance of the race file. */
+        private File myRaceFile;
+        
+        /**
+         * Constructs a file loader.
+         * @param theRaceFile the race file
+         */
+        FileLoader(final File theRaceFile) {
+            myRaceFile = theRaceFile;
+        }
+
+        @SuppressWarnings("resource")
+        @Override
+        public RaceInfo doInBackground() throws IOException {
+            final Scanner input = new Scanner(myRaceFile);
+            final StringBuilder sb = new StringBuilder();
+            if (!input.hasNextLine()) {
+                throw new IOException();
+            }
+            final RaceInfo raceInfo = parseHeader(input);
+            while (input.hasNextLine()) {
+                Message message = null;
+                final String line = input.nextLine();
+                if (line.substring(0, 2).equals("$L")) {
+                    message = parseLeaderBoard(line);
+                } else if (line.substring(0, 2).equals("$T")) {
+                    message = parseTelemetry(line);
+                } else if (line.substring(0, 2).equals("$C")) {
+                    message = parseLineCrossing(line);
+                } else {                  
+                    throw new IOException();
+                }
+                if (message != null) {
+                    getMessageListAt(message.getTime()).add(message);
+                }
+            }
+
+            return raceInfo;
+        } 
+
+        @Override
+        public void done() {
+            
+            try {
+
+                /*
+                 * Do something with the result of reading the file.
+                 */
+                myPcs.firePropertyChange(PROPERTY_HEADER, null, get());
+                myPcs.firePropertyChange(PROPERTY_DONE_LOADING, null, 0);
+
+            } catch (final InterruptedException | ExecutionException ex) {
+                ex.printStackTrace();
+                myPcs.firePropertyChange(PROPERTY_ERROR, null, 0);
+            }       
+        }
+    }
+}
+

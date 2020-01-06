@@ -1,0 +1,454 @@
+
+package view;
+
+import static model.PropertyChangeEnabledRaceControls.PROPERTY_HEADER;
+import static model.PropertyChangeEnabledRaceControls.PROPERTY_OUTPUT;
+import static model.PropertyChangeEnabledRaceControls.PROPERTY_DONE_LOADING;
+import static model.PropertyChangeEnabledRaceControls.PROPERTY_MULTIPLIER;
+import static model.PropertyChangeEnabledRaceControls.PROPERTY_LOOP;
+import static model.PropertyChangeEnabledRaceControls.PROPERTY_RACE_RUNNING;
+
+import application.Main;
+import controller.MainController;
+import controller.RaceInfoMenuItem;
+import java.awt.BorderLayout;
+import java.awt.Cursor;
+import java.awt.GridLayout;
+import java.awt.event.ItemEvent;
+import java.awt.event.ItemListener;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import javax.swing.Action;
+import javax.swing.BorderFactory;
+import javax.swing.ImageIcon;
+import javax.swing.JButton;
+import javax.swing.JCheckBox;
+import javax.swing.JFileChooser;
+import javax.swing.JFrame;
+import javax.swing.JMenu;
+import javax.swing.JMenuBar;
+import javax.swing.JMenuItem;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JSlider;
+import javax.swing.JTabbedPane;
+import javax.swing.JTextArea;
+import javax.swing.JToolBar;
+import javax.swing.ScrollPaneConstants;
+import javax.swing.text.DefaultCaret;
+import model.PropertyChangeEnabledRaceControls;
+import model.RaceInfo;
+import model.RaceModel;
+import model.Racer;
+
+/**
+ * Comment me.
+ * 
+ * @author Charles Bryan
+ * @author your name
+ * @version Autumn 2019
+ */
+public class MainFrame extends JFrame implements PropertyChangeListener, ItemListener {
+
+    /** The serialization ID. */
+    private static final long serialVersionUID = -6759410572845422202L;
+
+    /** Row dimension for output area. */
+    private static final int MY_OUTPUT_AREA_ROW = 10;
+
+    /** Column dimension for output area. */
+    private static final int MY_OUTPUT_AREA_COLUMN = 50;
+
+    /** Border dimensions for main panel. */
+    private static final int MAIN_BORDER_PANEL_DIMENSIONS = 10;
+
+    /** Border dimensions for time slider. */
+    private static final int MY_TIME_SLIDER_BORDER_DIMENSIONS = 5;
+    
+    /** Top, left, and right border dimensions for panel. */
+    private static final int PANEL_BORDER_TOP_LEFT_RIGHT = 5;
+    
+    /** Bottom border dimension for panel. */
+    private static final int PANEL_BORDER_BOTTOM = 25;
+    
+    /** Image icon for race application. */
+    private final ImageIcon myAppIcon = new ImageIcon("./images/ic_race.png");
+
+    /** Display of messages coming from the Race Model. */
+    private final JTextArea myOutputArea;
+
+    /** Panel to display CheckBoxs for each race Participant. */
+    private final JPanel myParticipantPanel;
+
+    /** A view on the race model that displays the current race time. */
+    private final JPanel myTimePanel;
+
+    /** A controller and view of the Race Model. */
+    private final JSlider myTimeSlider;
+
+    /** The list of javax.swing.Actions that make up the ToolBar (Controls) buttons. */
+    private final List<Action> myControlActions;
+    
+    /** Collection of check box with its corresponding racer ID. */
+    private final Map<JCheckBox, Integer> myCheckBox;
+
+    /** Container to hold the different output areas. */
+    private final JTabbedPane myTabbedPane;
+    
+    /** Content Pane. */
+    private final MainController myController;
+    
+    /** The file chooser for when selecting a file. */
+    private final JFileChooser myFileChooser = new JFileChooser(".");
+    
+    /** An instance of the race Model. */
+    private final PropertyChangeEnabledRaceControls myModel;
+    
+    /** An instance for the speed toggle action. */
+    private SimpleAction mySpeedAction;
+    
+    /** An instance for the looping action. */
+    private SimpleAction myLoopAction;
+    
+    /** An instance for the play toggle action. */
+    private SimpleAction myPlayAction;
+
+    /** Check. */
+    private boolean myIsClicked;
+
+    /**
+     * Construct a main window.
+     */
+    public MainFrame() {
+        super("Astonishing Race!");
+        
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        
+        myModel = new RaceModel();
+        myModel.addPropertyChangeListener(this);
+        myController = new MainController(myModel);
+        myControlActions = new ArrayList<>();
+        myCheckBox = new HashMap<>();
+        myIsClicked = true;
+        myOutputArea = new JTextArea(MY_OUTPUT_AREA_ROW, MY_OUTPUT_AREA_COLUMN);
+        myTimePanel = new TimePanel();
+        myModel.addPropertyChangeListener((PropertyChangeListener) myTimePanel);
+        myTimeSlider = new Slider(theValue -> {
+            myController.onSliderStateChanged(theValue);
+        });
+        myTabbedPane = new JTabbedPane();
+        myParticipantPanel = new JPanel(new GridLayout(0, 1));
+        myTabbedPane.setEnabled(false);
+        
+        buildActions();
+        setUpComponents();
+        pack();
+        setVisible(true);
+    }
+
+    /**
+     * Displays a simple JFrame.
+     */
+    private void setUpComponents() {
+        setLayout(new BorderLayout());
+        setIconImage(myAppIcon.getImage());
+        setJMenuBar(buildMenuBar());
+        // JPanel is a useful container for organizing components inside a JFrame
+        final JPanel mainPanel = new JPanel(new BorderLayout());
+        mainPanel.setBorder(BorderFactory.createEmptyBorder(MAIN_BORDER_PANEL_DIMENSIONS,
+                                                            MAIN_BORDER_PANEL_DIMENSIONS,
+                                                            MAIN_BORDER_PANEL_DIMENSIONS,
+                                                            MAIN_BORDER_PANEL_DIMENSIONS));
+
+        mainPanel.add(buildSliderPanel(), BorderLayout.NORTH);
+
+        myOutputArea.setEditable(false);
+        final DefaultCaret caret = (DefaultCaret) myOutputArea.getCaret();
+        caret.setUpdatePolicy(DefaultCaret.ALWAYS_UPDATE);
+        final JScrollPane scrollPane = new JScrollPane(myOutputArea);
+        
+        final JScrollPane participantScrollPane = new JScrollPane(myParticipantPanel, 
+                                                     JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, 
+                                                      JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        participantScrollPane.setPreferredSize(scrollPane.getSize());
+
+        myTabbedPane.addTab("Data Output Stream", scrollPane);
+        myTabbedPane.addTab("Race Participants", participantScrollPane);
+
+        mainPanel.add(myTabbedPane, BorderLayout.CENTER);
+
+        add(mainPanel, BorderLayout.CENTER);
+
+        add(buildToolBar(), BorderLayout.SOUTH);
+
+    }
+    
+    /**
+     * Creates check boxes for participants panel.
+     * @param theRacers the list of racers
+     */
+    private void createCheckBoxes(final List<Racer> theRacers) {
+        myParticipantPanel.removeAll();
+        for (final Racer r : theRacers) {
+            final JCheckBox checkBox = new JCheckBox(r.getRacerName());
+            checkBox.setSelected(true);
+            checkBox.addItemListener(this);
+            myCheckBox.put(checkBox, r.getRacerID());
+            myParticipantPanel.add(checkBox);
+        }
+    }
+
+    /**
+     * Builds the panel with the time slider and time label.
+     * 
+     * @return the panel
+     */
+    private JPanel buildSliderPanel() {
+        myModel.addPropertyChangeListener((PropertyChangeListener) myTimeSlider);
+        final JPanel panel = new JPanel(new BorderLayout());
+        panel.setBorder(BorderFactory.createEmptyBorder(PANEL_BORDER_TOP_LEFT_RIGHT, 
+                                                        PANEL_BORDER_TOP_LEFT_RIGHT, 
+                                                        PANEL_BORDER_BOTTOM, 
+                                                        PANEL_BORDER_TOP_LEFT_RIGHT));
+
+        myTimeSlider.setBorder(BorderFactory.
+                        createEmptyBorder(MY_TIME_SLIDER_BORDER_DIMENSIONS,
+                                           MY_TIME_SLIDER_BORDER_DIMENSIONS,
+                                           MY_TIME_SLIDER_BORDER_DIMENSIONS,
+                                           MY_TIME_SLIDER_BORDER_DIMENSIONS));
+
+        panel.add(myTimeSlider, BorderLayout.CENTER);
+
+        final JPanel padding = new JPanel();
+        padding.add(myTimePanel);
+        panel.add(padding, BorderLayout.EAST);
+
+        return panel;
+    }
+
+    /**
+     * Constructs a JMenuBar for the Frame.
+     * 
+     * @return the Menu Bar
+     */
+    private JMenuBar buildMenuBar() {
+        final JMenuBar bar = new JMenuBar();
+        bar.add(buildFileMenu());
+        bar.add(buildControlsMenu(myControlActions));
+        bar.add(buildHelpMenu());
+        return bar;
+    }
+
+    /**
+     * Builds the file menu for the menu bar.
+     * 
+     * @return the File menu
+     */
+    private JMenu buildFileMenu() {
+
+        final JMenu fileMenu = new JMenu("File");
+
+        final JMenuItem load = new JMenuItem("Load Race...");
+
+        load.addActionListener(theEvent -> {
+            final int choice = myFileChooser.showOpenDialog(this);
+            if (choice == JFileChooser.APPROVE_OPTION) {
+                try {
+                    setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+                    myOutputArea.setText("");
+                    myController.onFileSelected(myFileChooser.getSelectedFile());
+                } catch (final IOException exception) {
+                    JOptionPane.showMessageDialog(this, "Error loading file.",
+                                                  "Error!", JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        });
+
+        fileMenu.add(load);
+
+        fileMenu.addSeparator();
+
+        final JMenuItem exitItem = new JMenuItem("Exit");
+
+        exitItem.addActionListener(theEvent -> {
+            System.exit(0);
+        });
+
+        fileMenu.add(exitItem);
+
+        return fileMenu;
+    }
+
+    /**
+     * Build the Controls JMenu.
+     * 
+     * @param theActions the Actions needed to add/create the items in this menu
+     * @return the Controls JMenu
+     */
+    private JMenu buildControlsMenu(final List<Action> theActions) {
+        final JMenu controlsMenu = new JMenu("Controls");
+
+        for (final Action a : theActions) {
+            a.setEnabled(false);
+            controlsMenu.add(a);
+        }
+        
+        return controlsMenu;
+    }
+
+    /**
+     * Build the Help JMenu.
+     * 
+     * @return the Help JMenu
+     */
+    private JMenu buildHelpMenu() {
+        final JMenu helpMenu = new JMenu("Help");
+
+        final JMenuItem infoItem = new RaceInfoMenuItem();
+        myModel.addPropertyChangeListener((PropertyChangeListener) infoItem);
+        helpMenu.add(infoItem);
+
+        final JMenuItem aboutItem = new JMenuItem("About...");
+        final String info = "Nathan Stickler\nAutumn 2019\nTCSS 305";
+        helpMenu.add(aboutItem);
+        aboutItem.addActionListener(theEvent -> {
+            JOptionPane.showMessageDialog(this, info, "About",
+                                          JOptionPane.INFORMATION_MESSAGE, myAppIcon);
+        });
+        return helpMenu;
+    }
+
+    /**
+     * Build the toolbar from the Actions list.
+     * 
+     * @return the toolbar with buttons for all of the Actions in the list
+     */
+    private JToolBar buildToolBar() {
+        final JToolBar toolBar = new JToolBar();
+        for (final Action a : myControlActions) {
+            final JButton b = new JButton(a);
+            b.setHideActionText(true);
+            b.setEnabled(false);
+            toolBar.add(b);
+        }
+        return toolBar;
+    }
+
+    /**
+     * Instantiate and add the Actions.
+     */
+    private void buildActions() {
+        myControlActions.add(new SimpleAction("Restart", "/ic_restart.png", theEvent ->  {
+            myController.onRestartClicked();
+        }));
+        
+        myPlayAction = new SimpleAction("Play", "/ic_play.png", theEvent ->  {
+            myController.onPlayToggleClicked();
+        });
+        myControlActions.add(myPlayAction);
+        
+        mySpeedAction = new SimpleAction("Times One", "/ic_one_times.png", theEvent ->  {
+            myController.onSpeedToggleClicked();
+        });
+        myControlActions.add(mySpeedAction);
+        
+        myLoopAction = new SimpleAction("Single Race", "/ic_repeat.png", theEvent ->  {
+            myController.onLoopToggleClicked();
+        });
+        myControlActions.add(myLoopAction);
+        
+        myControlActions.add(new SimpleAction("Clear", "/ic_clear.png", theEvent ->  {
+            myOutputArea.setText("");
+        }));
+    }
+
+    /**
+     * Create the GUI and show it. For thread safety, this method should be invoked from the
+     * event-dispatching thread.
+     */
+    public static void createAndShowGUI() {
+        final MainFrame mainPanel = new MainFrame();
+    }
+
+    @Override
+    public void propertyChange(final PropertyChangeEvent theEvent) {
+        // TODO Auto-generated method stub
+        switch (theEvent.getPropertyName()) {
+            case PROPERTY_OUTPUT:
+                myOutputArea.append((String) theEvent.getNewValue());
+                myOutputArea.append("\n");
+                break;
+            case PROPERTY_HEADER: 
+                final RaceInfo info = (RaceInfo) theEvent.getNewValue();
+                createCheckBoxes(info.getRacers());
+                break;
+            case PROPERTY_DONE_LOADING: 
+                setCursor(Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR));
+                for (final Action a : myControlActions) {
+                    a.setEnabled(true);
+                }
+                myTabbedPane.setEnabled(true);
+                myTimeSlider.setEnabled(true);
+                break;
+            case PROPERTY_RACE_RUNNING:
+                if ((boolean) theEvent.getNewValue()) {
+                    myPlayAction.putValue(Action.NAME, "Pause");
+                    myPlayAction.setIcon((ImageIcon) new ImageIcon(Main.
+                                                                getRes("/ic_pause.png")));
+                    myTimeSlider.setEnabled(false);
+                } else {
+                    myPlayAction.putValue(Action.NAME, "Play");
+                    myPlayAction.setIcon((ImageIcon) new ImageIcon(Main.
+                                                                getRes("/ic_play.png")));
+                    myTimeSlider.setEnabled(true);
+                }
+                break;
+            case PROPERTY_MULTIPLIER:
+                if ((int) theEvent.getNewValue() == 1) {
+                    mySpeedAction.putValue(Action.NAME, "Times One");
+                    mySpeedAction.setIcon((ImageIcon) new ImageIcon(Main.
+                                                                getRes("/ic_One_times.png")));
+                } else {
+                    mySpeedAction.putValue(Action.NAME, "Times Four");
+                    mySpeedAction.setIcon((ImageIcon) new ImageIcon(Main.
+                                                                getRes("/ic_Four_times.png")));
+                }
+                break;
+            case PROPERTY_LOOP:
+                if (!(boolean) theEvent.getNewValue()) {
+                    myLoopAction.putValue(Action.NAME, "Single Race");
+                    myLoopAction.setIcon((ImageIcon) new ImageIcon(Main.
+                                                                getRes("/ic_repeat.png")));
+                } else {
+                    myLoopAction.putValue(Action.NAME, "Loop Race");
+                    myLoopAction.setIcon((ImageIcon) new ImageIcon(Main.
+                                                              getRes("/ic_repeat_color.png")));
+                }
+                break;
+            default:
+                break; 
+        }
+    }
+
+    @Override
+    public void itemStateChanged(final ItemEvent theEvent) {
+        for (final JCheckBox box : myCheckBox.keySet()) {
+            final Object obj = theEvent.getItemSelectable();
+            if (obj.equals(box)) {
+                if (theEvent.getStateChange() == ItemEvent.DESELECTED) {
+                    myIsClicked = false;                     
+                    myIsClicked = true;
+                    myModel.toggleParticipant(myCheckBox.get(box), false);
+                } else {
+                    myModel.toggleParticipant(myCheckBox.get(box), true);
+                }
+            }
+        } 
+    }
+}

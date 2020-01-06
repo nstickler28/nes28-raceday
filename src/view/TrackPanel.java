@@ -1,0 +1,269 @@
+package view;
+
+import static model.PropertyChangeEnabledRaceControls.PROPERTY_HEADER;
+import static model.PropertyChangeEnabledRaceControls.PROPERTY_MESSAGES;
+import static model.PropertyChangeEnabledRaceControls.PROPERTY_BACK_TO_START;
+import static view.RaceView.PROPERTY_SELECT;
+import static view.RaceView.PROPERTY_DESELECT;
+
+import java.awt.BasicStroke;
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Dimension;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.awt.geom.Ellipse2D;
+import java.awt.geom.Point2D;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
+import java.beans.PropertyChangeSupport;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import javax.swing.BorderFactory;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.SwingConstants;
+import javax.swing.border.TitledBorder;
+import model.LineCrossingMessage;
+import model.Message;
+import model.RaceInfo;
+import model.Racer;
+import model.TelemetryMessage;
+import track.VisibleRaceTrack;
+
+/**
+ * Creates the race track.
+ * 
+ * @author Nathan Stickler
+ * @version 11/30/19
+ */
+public class TrackPanel extends JPanel implements PropertyChangeListener {
+
+    /**
+     * 
+     */
+    private static final long serialVersionUID = -7815598009396561275L;
+
+    /** The size of the Race Track Panel. */
+    private static final Dimension TRACK_SIZE = new Dimension(500, 400);
+    
+    /** The x and y location of the Track. */
+    private static final int OFF_SET = 40;
+
+    /** The stroke width in pixels. */
+    private static final int STROKE_WIDTH = 25;
+
+    /** The size of participants moving around the track. */
+    private static final int OVAL_SIZE = 20;
+    
+    /** Manager for Property Change Listeners. */
+    private final PropertyChangeSupport myPcs;
+    
+    /** The track view. */
+    private VisibleRaceTrack myTrack;
+    
+    /** The track width. */
+    private int myTrackWidth;
+    
+    /** The track height. */
+    private int myTrackHeight;
+    
+    /** The track distance. */
+    private int myTrackDistance;
+    
+    /** A label for the winner of the race. */
+    private final JLabel myRaceWinner;
+    
+    /** Colors to represent racers by ID. */
+    private final Map<Integer, Color> myColors;
+    
+    /** Circles representing racers by ID. */
+    private Map<Integer, Ellipse2D> myRacerCircle;
+    
+    /** A map of the racers. */
+    private final Map<Integer, Racer> myRacers;
+    
+    /** The current timestamp telemetry message. */
+    private final List<LineCrossingMessage> myLineCrossingMsgs;
+    
+    /** The racer IDs in their initial order. */
+    private final List<Integer> myOrderedIDs;
+    
+    /**
+     * Constructs the race track panel.
+     * @param thePcs support on firing changes to GUI
+     */
+    public TrackPanel(final PropertyChangeSupport thePcs) {
+        super();
+        
+        myColors = new HashMap<>();
+        myRacers = new HashMap<>();
+        myRacerCircle = new HashMap<>();
+        myOrderedIDs = new ArrayList<>();
+        
+        myPcs = thePcs;
+        myLineCrossingMsgs = new ArrayList<>();
+        myRaceWinner = new JLabel();
+        setUpComponents();
+    }
+    
+    /**
+     * Sets up the components of the track panel.
+     */
+    private void setUpComponents() {
+        final TitledBorder title;
+        title = BorderFactory.createTitledBorder("Race Track");
+        setBorder(title);
+        setLayout(new BorderLayout());
+        setPreferredSize(TRACK_SIZE);
+        addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(final MouseEvent theEvent) {
+                final List<Integer> temp = new ArrayList<>();
+                temp.addAll(myOrderedIDs);
+                Collections.reverse(temp);
+                
+                for (final int id : temp) {
+                    final Ellipse2D c = myRacerCircle.get(id);
+                    if ((theEvent.getButton() == MouseEvent.BUTTON1)
+                                    && c.contains(theEvent.getX(), theEvent.getY())) {
+                        myPcs.firePropertyChange(PROPERTY_SELECT, null, id);
+                        break;
+                    } else if ((theEvent.getButton() == MouseEvent.BUTTON1)
+                                    && !c.contains(theEvent.getX(), theEvent.getY())) {
+                        myPcs.firePropertyChange(PROPERTY_DESELECT, false, true);
+                    }
+                }
+            }
+        });
+    }
+    
+    @Override
+    public void paintComponent(final Graphics theGraphics) {
+        super.paintComponent(theGraphics);
+        final Graphics2D g2d = (Graphics2D) theGraphics;
+        g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
+                             RenderingHints.VALUE_ANTIALIAS_ON);
+        if (myTrack != null) {
+            g2d.setPaint(Color.BLACK);
+            g2d.setStroke(new BasicStroke(STROKE_WIDTH));
+            g2d.draw(myTrack);
+        }
+        for (final int id : myOrderedIDs) {
+            g2d.setPaint(myColors.get(id));
+            g2d.setStroke(new BasicStroke(1));
+            g2d.fill(myRacerCircle.get(id));
+        }
+    }
+    
+    @Override
+    public void propertyChange(final PropertyChangeEvent theEvent) {
+        if (PROPERTY_HEADER.equals(theEvent.getPropertyName())) {
+            final RaceInfo info = (RaceInfo) theEvent.getNewValue();
+
+            myColors.clear();
+            myRacers.clear();
+            myRacerCircle.clear();
+            myOrderedIDs.clear();
+            
+            myTrackHeight = info.getTrackHeight();
+            myTrackWidth = info.getTrackWidth();
+            myTrackDistance = info.getLapDistance();
+            myLineCrossingMsgs.clear();
+            remove(myRaceWinner);
+            createTrack();
+            for (final Racer r : info.getRacers()) {
+                final Point2D.Double newDistance = 
+                                myTrack.getPointAtDistance(r.getStartingDistance());
+                final Ellipse2D circle = new Ellipse2D.Double(newDistance.x - OVAL_SIZE / 2,
+                                                              newDistance.y - OVAL_SIZE / 2,
+                                                              OVAL_SIZE, OVAL_SIZE);
+                myColors.put(r.getRacerID(), r.getColor());
+                myRacers.put(r.getRacerID(), r);
+                myRacerCircle.put(r.getRacerID(), circle);
+                myOrderedIDs.add(r.getRacerID());
+            }
+            repaint();
+        } else if (PROPERTY_MESSAGES.equals(theEvent.getPropertyName())) {
+            propertyMessage(theEvent);
+        } else if (PROPERTY_BACK_TO_START.equals(theEvent.getPropertyName())) {
+            remove(myRaceWinner);
+            myRacerCircle = new HashMap<>();
+            myLineCrossingMsgs.clear();
+            for (final Racer r : myRacers.values()) {
+                final Point2D.Double newDistance = 
+                                myTrack.getPointAtDistance(r.getStartingDistance());
+                final Ellipse2D circle = new Ellipse2D.Double(newDistance.x - OVAL_SIZE / 2,
+                                                              newDistance.y - OVAL_SIZE / 2,
+                                                              OVAL_SIZE, OVAL_SIZE);
+                myRacerCircle.put(r.getRacerID(), circle);
+            }
+            repaint();
+        }
+    }
+    
+    /**
+     * Creates the track.
+     */
+    private void createTrack() {
+        final int width = TRACK_SIZE.width - OFF_SET * 2;
+        final double height = ((double) myTrackHeight / myTrackWidth) * width;
+
+        final int x = OFF_SET;
+        final int y = (int) (TRACK_SIZE.height - height) / 2 + 2;
+        myTrack = new VisibleRaceTrack(x, y, width, (int) height, myTrackDistance);
+    }
+    
+    /**
+     * Helper method displaying the race winner.
+     * @param theMsg the line message
+     */
+    private void displayWinner(final LineCrossingMessage theMsg) {
+        if (theMsg == myLineCrossingMsgs.get(0)) {
+            final int id = theMsg.getRacerID();
+            final String name = myRacers.get(id).getRacerName();
+            final String usedTime = TimePanel.formatTime(theMsg.getTime());
+            final String text = "<html><b>" + id + ": " + name 
+                            + " is the winner of the race!<br>Time: "
+                            + usedTime + "</b></html>";
+            myRaceWinner.setForeground(Color.BLUE);
+            myRaceWinner.setText(text);
+            myRaceWinner.setHorizontalAlignment(SwingConstants.CENTER);
+            add(myRaceWinner, BorderLayout.CENTER);
+        }
+    }
+    
+    /**
+     * Helper method of listening PROPERTY_OUTPUT change event.
+     * @param theEvent the property change event
+     */
+    private void propertyMessage(final PropertyChangeEvent theEvent) {
+        if (PROPERTY_MESSAGES.equals(theEvent.getPropertyName())) {
+            @SuppressWarnings("unchecked")
+            final List<Message> list = (List<Message>) theEvent.getNewValue();
+            for (final Message msg : list) {
+                if (msg instanceof TelemetryMessage) {
+                    final TelemetryMessage tmsg = (TelemetryMessage) msg;
+                    final Point2D.Double newDistance = myTrack.getPointAtDistance(
+                                                                        tmsg.getDistance());
+                    myRacerCircle.get(tmsg.getRacerID()).
+                        setFrame(newDistance.x - OVAL_SIZE / 2, 
+                                 newDistance.y - OVAL_SIZE / 2, OVAL_SIZE, OVAL_SIZE);
+                } else if (msg instanceof LineCrossingMessage) {
+                    final LineCrossingMessage lineCrossing = (LineCrossingMessage) msg;
+                    if (myLineCrossingMsgs.isEmpty() && lineCrossing.isFinish()) {
+                        myLineCrossingMsgs.add(lineCrossing);
+                        displayWinner(lineCrossing);
+                    }
+                }
+            }           
+            repaint();
+        }
+    }
+}

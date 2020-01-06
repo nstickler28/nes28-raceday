@@ -1,0 +1,57 @@
+package model;
+
+/**
+ * Creates race participant.
+ * 
+ * @author Nathan Stickler
+ * @version 11/18/19
+ */
+public class Racers {
+
+    /** The Racer's ID. */
+    private final int myRacerID;
+    
+    /** The Racer's name. */
+    private final String myRacerName;
+    
+    /** The starting point of the racer. */
+    private final double myStartingDistance;
+    
+    /**
+     * Constructs a racer.
+     * 
+     * @param theRacerID the racer's ID
+     * @param theRacerName the racer's name
+     * @param theStartingDistance the racer's starting point
+     */
+    public Racers(final int theRacerID, final String theRacerName,
+                  final double theStartingDistance) {
+        myRacerID = theRacerID;
+        myRacerName = theRacerName;
+        myStartingDistance = theStartingDistance;
+    }
+    
+    /**
+     * Returns the racer's ID.
+     * @return the racer's ID.
+     */
+    public int getRacerID() {
+        return myRacerID;
+    }
+    
+    /**
+     * Returns the racer's name.
+     * @return the racer's name
+     */
+    public String getRacerName() {
+        return myRacerName;
+    }
+    
+    /**
+     * Returns the racer's starting point.
+     * @return the racer's starting point
+     */
+    public double getStartingDistance() {
+        return myStartingDistance;
+    }
+}

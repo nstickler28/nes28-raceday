@@ -1,0 +1,11 @@
+package view;
+
+/**
+ * Creates a status bar of the race time to the selected racer.
+ * 
+ * @author Nathan Stickler
+ * @version 12/1/19
+ */
+public class StatusBar {
+
+}

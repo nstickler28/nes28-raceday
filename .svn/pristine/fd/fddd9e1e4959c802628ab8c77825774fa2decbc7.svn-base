@@ -1,0 +1,144 @@
+package view;
+
+import static model.PropertyChangeEnabledRaceControls.PROPERTY_HEADER;
+import static model.PropertyChangeEnabledRaceControls.PROPERTY_MESSAGES;
+import static model.PropertyChangeEnabledRaceControls.PROPERTY_BACK_TO_START;
+import static view.RaceView.PROPERTY_DESELECT;
+import static view.RaceView.PROPERTY_SELECT;
+
+import java.awt.Color;
+import java.awt.Dimension;
+import java.awt.FlowLayout;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
+import java.beans.PropertyChangeSupport;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import javax.swing.BorderFactory;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.SwingConstants;
+import javax.swing.border.EtchedBorder;
+import model.LeaderboardMessage;
+import model.Message;
+import model.RaceInfo;
+import model.Racer;
+
+/**
+ * Creates a leaderboard panel.
+ * 
+ * @author Nathan Stickler
+ * @version 12/1/19
+ */
+public class LeaderBoardPanel extends JPanel implements PropertyChangeListener {
+
+    /**
+     * 
+     */
+    private static final long serialVersionUID = -3943920123197430990L;
+
+    /** Constant for the dimension of the board size. */
+    private static final Dimension BOARD_SIZE = new Dimension(300, 400);
+    
+    /** Constant for the dimension of the panel size. */
+    private static final Dimension PANEL_SIZE = new Dimension(255, 30);
+    
+    /** Padding for the leaderboard panel. */
+    private static final int PADDING = 6;
+    
+    /** Manager for Property Change Listeners. */
+    private final PropertyChangeSupport myPcs;
+    
+    /** Collection of leaderboard panels sorted by racer IDs. */
+    private final Map<Integer, JPanel> myRacerBoard;
+    
+    /** The initial leaderboard. */
+    private final List<JPanel> myInitialLeaderBoard;
+    
+    /**
+     * Creates the leaderboard panel.
+     * @param thePcs the property change firing to the GUI.
+     */
+    public LeaderBoardPanel(final PropertyChangeSupport thePcs) {
+        super();
+        setPreferredSize(BOARD_SIZE);
+        setLayout(new FlowLayout(FlowLayout.CENTER, 0, 0));
+        myPcs = thePcs;
+        myRacerBoard = new HashMap<>();
+        myInitialLeaderBoard = new ArrayList<>();
+        setUpComponents();
+    }
+    
+    /**
+     * Sets up components.
+     */
+    private void setUpComponents() {
+        addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(final MouseEvent theEvent) {
+                if (theEvent.getButton() == MouseEvent.BUTTON1) {
+                    myPcs.firePropertyChange(PROPERTY_DESELECT, false, true);
+                }
+            }
+        });
+    }
+    
+    @Override
+    public void propertyChange(final PropertyChangeEvent theEvent) {
+        if (PROPERTY_HEADER.equals(theEvent.getPropertyName())) {
+            myInitialLeaderBoard.clear();
+            final RaceInfo info = (RaceInfo) theEvent.getNewValue();
+            removeAll();
+            for (final Racer r : info.getRacers()) {
+                final JPanel racerPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+                final JLabel label = new JLabel(r.getRacerID() + ": " + r.getRacerName(),
+                                                SwingConstants.CENTER);
+                label.setPreferredSize(PANEL_SIZE);
+                label.setBorder(BorderFactory.
+                                createEtchedBorder(EtchedBorder.LOWERED, Color.BLACK, null));
+                label.setOpaque(true);
+                //label.setIcon(new );
+                racerPanel.add(label);
+                racerPanel.setBorder(BorderFactory.createEmptyBorder(PADDING, 0, 0, 0));
+                racerPanel.addMouseListener(new MouseAdapter() {
+                    @Override
+                    public void mousePressed(final MouseEvent theEvent) {
+                        if (theEvent.getButton() == MouseEvent.BUTTON1) {
+                            myPcs.firePropertyChange(PROPERTY_SELECT, null, r.getRacerID());
+                        }
+                    }
+                });
+                add(racerPanel);
+                myRacerBoard.put(r.getRacerID(), racerPanel);
+                myInitialLeaderBoard.add(racerPanel);
+            }
+            repaint();
+            revalidate();
+        } else if (PROPERTY_MESSAGES.equals(theEvent.getPropertyName())) {
+            @SuppressWarnings("unchecked")
+            final List<Message> list = (List<Message>) theEvent.getNewValue();
+            for (final Message msg : list) {
+                if (msg instanceof LeaderboardMessage) {
+                    removeAll();
+                    final LeaderboardMessage lbmsg = (LeaderboardMessage) msg;
+                    for (final int id : lbmsg.getRacerID()) {
+                        add(myRacerBoard.get(id));
+                    }
+                }
+            }
+            repaint();
+            revalidate();
+        } else if (PROPERTY_BACK_TO_START.equals(theEvent.getPropertyName())) {
+            removeAll();
+            for (int i = 0; i < myInitialLeaderBoard.size(); i++) {
+                add(myInitialLeaderBoard.get(i));
+            }
+            repaint();
+            revalidate();
+        }
+    }
+}

@@ -1,0 +1,67 @@
+package controller;
+
+import java.io.File;
+import java.io.IOException;
+import javax.swing.Timer;
+import model.PropertyChangeEnabledRaceControls;
+
+
+/**
+ * 
+ * 
+ * @author Nathan Stickler
+ * @version 11/23/19
+ */
+public class MainController {
+
+    
+    /** A reference to the backing Race Model. */
+    private final PropertyChangeEnabledRaceControls myRace;
+    
+    /** The timer that advances the Race Model. */
+    private final Timer myTimer;
+    
+    /**
+     * Constructs a controller.
+     * @param theRace
+     */
+    public MainController(final PropertyChangeEnabledRaceControls theRace) {
+        myRace = theRace;
+        // TODO This component require Event Handlers
+        myTimer = new Timer(0, null);
+    }
+    
+    public void onFileSelected(final File theFile)  throws IOException {
+        myRace.loadRace(theFile);
+        
+    }
+    
+    public void onRaceInfoClicked() {
+        
+    }
+
+    public void onRestartClicked() {
+        // TODO Auto-generated method stub
+        
+    }
+
+    public void onPlayClicked() {
+        // TODO Auto-generated method stub
+        
+    }
+
+    public void onSpeedToggleClicked() {
+        // TODO Auto-generated method stub
+        
+    }
+
+    public void onLoopToggleClicked() {
+        // TODO Auto-generated method stub
+        
+    }
+
+    public void onClearClicked() {
+        // TODO Auto-generated method stub
+        
+    }
+}
